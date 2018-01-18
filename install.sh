@@ -14,6 +14,7 @@ fi
 BIN_PATH="${PREFIX}/bin"
 SHARE_PATH="${PREFIX}/share/ruby-build"
 PATCH_PATH="${PREFIX}/share/ruby-build/patches"
+RUBY_CONFIGURE_OPTS=--disable-install-doc
 
 mkdir -p "$BIN_PATH" "$SHARE_PATH" "$PATCH_PATH"
 
