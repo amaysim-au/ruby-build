@@ -61,6 +61,7 @@ assert_build_log() {
   cached_tarball "yaml-0.1.6"
   cached_tarball "ruby-2.0.0"
 
+  stub uname '-s : echo Linux'
   stub brew false
   stub_make_install
   stub_make_install
@@ -68,6 +69,7 @@ assert_build_log() {
   install_fixture definitions/needs-yaml
   assert_success
 
+  unstub uname
   unstub make
 
   assert_build_log <<OUT
@@ -84,14 +86,20 @@ OUT
   cached_tarball "yaml-0.1.6"
   cached_tarball "ruby-2.0.0"
 
+  stub uname '-s : echo Linux'
   stub brew false
   stub_make_install
   stub_make_install
   stub patch ' : echo patch "$@" | sed -E "s/\.[[:alnum:]]+$/.XXX/" >> build.log'
 
-  TMPDIR="$TMP" install_fixture --patch definitions/needs-yaml <<<""
+  TMPDIR="$TMP" install_fixture --patch definitions/needs-yaml <<PATCH
+diff -pU3 align.c align.c
+--- align.c 2017-09-14 21:09:29.000000000 +0900
++++ align.c 2017-09-15 05:56:46.000000000 +0900
+PATCH
   assert_success
 
+  unstub uname
   unstub make
   unstub patch
 
@@ -106,18 +114,57 @@ make install
 OUT
 }
 
-@test "apply ruby patch from git diff before building" {
+@test "striplevel ruby patch before building" {
   cached_tarball "yaml-0.1.6"
   cached_tarball "ruby-2.0.0"
 
+  stub uname '-s : echo Linux'
   stub brew false
   stub_make_install
   stub_make_install
   stub patch ' : echo patch "$@" | sed -E "s/\.[[:alnum:]]+$/.XXX/" >> build.log'
 
-  TMPDIR="$TMP" install_fixture --patch definitions/needs-yaml <<<"diff --git a/script.rb"
+  TMPDIR="$TMP" install_fixture --patch definitions/needs-yaml <<PATCH
+diff -pU3 a/configure b/configure
+--- a/configure 2017-09-14 21:09:29.000000000 +0900
++++ b/configure 2017-09-15 05:56:46.000000000 +0900
+PATCH
   assert_success
 
+  unstub uname
+  unstub make
+  unstub patch
+
+  assert_build_log <<OUT
+yaml-0.1.6: --prefix=$INSTALL_ROOT
+make -j 2
+make install
+patch -p1 --force -i $TMP/ruby-patch.XXX
+ruby-2.0.0: --prefix=$INSTALL_ROOT
+make -j 2
+make install
+OUT
+}
+
+@test "apply ruby patch from git diff before building" {
+  cached_tarball "yaml-0.1.6"
+  cached_tarball "ruby-2.0.0"
+
+  stub uname '-s : echo Linux'
+  stub brew false
+  stub_make_install
+  stub_make_install
+  stub patch ' : echo patch "$@" | sed -E "s/\.[[:alnum:]]+$/.XXX/" >> build.log'
+
+  TMPDIR="$TMP" install_fixture --patch definitions/needs-yaml <<PATCH
+diff --git a/test/build.bats b/test/build.bats
+index 4760c31..66a237a 100755
+--- a/test/build.bats
++++ b/test/build.bats
+PATCH
+  assert_success
+
+  unstub uname
   unstub make
   unstub patch
 
@@ -138,12 +185,14 @@ OUT
   brew_libdir="$TMP/homebrew-yaml"
   mkdir -p "$brew_libdir"
 
+  stub uname '-s : echo Linux'
   stub brew "--prefix libyaml : echo '$brew_libdir'" false
   stub_make_install
 
   install_fixture definitions/needs-yaml
   assert_success
 
+  unstub uname
   unstub brew
   unstub make
 
@@ -203,7 +252,7 @@ OUT
 @test "number of CPU cores defaults to 2" {
   cached_tarball "ruby-2.0.0"
 
-  stub uname '-s : echo Darwin'
+  stub uname '-s : echo Darwin' false
   stub sysctl false
   stub_make_install
 
@@ -226,7 +275,7 @@ OUT
 @test "number of CPU cores is detected on Mac" {
   cached_tarball "ruby-2.0.0"
 
-  stub uname '-s : echo Darwin'
+  stub uname '-s : echo Darwin' false
   stub sysctl '-n hw.ncpu : echo 4'
   stub_make_install
 
@@ -250,7 +299,7 @@ OUT
 @test "number of CPU cores is detected on FreeBSD" {
   cached_tarball "ruby-2.0.0"
 
-  stub uname '-s : echo FreeBSD'
+  stub uname '-s : echo FreeBSD' false
   stub sysctl '-n hw.ncpu : echo 1'
   stub_make_install
 
@@ -274,6 +323,7 @@ OUT
 @test "setting RUBY_MAKE_INSTALL_OPTS to a multi-word string" {
   cached_tarball "ruby-2.0.0"
 
+  stub uname '-s : echo Linux'
   stub_make_install
 
   export RUBY_MAKE_INSTALL_OPTS="DOGE=\"such wow\""
@@ -282,6 +332,7 @@ install_package "ruby-2.0.0" "http://ruby-lang.org/ruby/2.0/ruby-2.0.0.tar.gz"
 DEF
   assert_success
 
+  unstub uname
   unstub make
 
   assert_build_log <<OUT
@@ -294,6 +345,7 @@ OUT
 @test "setting MAKE_INSTALL_OPTS to a multi-word string" {
   cached_tarball "ruby-2.0.0"
 
+  stub uname '-s : echo Linux'
   stub_make_install
 
   export MAKE_INSTALL_OPTS="DOGE=\"such wow\""
@@ -302,6 +354,7 @@ install_package "ruby-2.0.0" "http://ruby-lang.org/ruby/2.0/ruby-2.0.0.tar.gz"
 DEF
   assert_success
 
+  unstub uname
   unstub make
 
   assert_build_log <<OUT
@@ -320,28 +373,16 @@ OUT
   assert [ -x ./here/bin/package ]
 }
 
-@test "make on FreeBSD 9 defaults to gmake" {
+@test "make on FreeBSD defaults to gmake" {
   cached_tarball "ruby-2.0.0"
 
-  stub uname "-s : echo FreeBSD" "-r : echo 9.1"
+  stub uname "-s : echo FreeBSD" false
   MAKE=gmake stub_make_install
 
   MAKE= install_fixture definitions/vanilla-ruby
   assert_success
 
   unstub gmake
-  unstub uname
-}
-
-@test "make on FreeBSD 10" {
-  cached_tarball "ruby-2.0.0"
-
-  stub uname "-s : echo FreeBSD" "-r : echo 10.0-RELEASE"
-  stub_make_install
-
-  MAKE= install_fixture definitions/vanilla-ruby
-  assert_success
-
   unstub uname
 }
 
@@ -354,6 +395,7 @@ apply -p1 -i /my/patch.diff
 exec ./configure "\$@"
 CONF
 
+  stub uname '-s : echo Linux'
   stub apply 'echo apply "$@" >> build.log'
   stub_make_install
 
@@ -363,6 +405,7 @@ install_package "ruby-2.0.0" "http://ruby-lang.org/pub/ruby-2.0.0.tar.gz"
 DEF
   assert_success
 
+  unstub uname
   unstub make
   unstub apply
 
@@ -388,41 +431,41 @@ OUT
   assert_success "hello world"
 }
 
-@test "mruby strategy overwrites non-writable files" {
-  cached_tarball "mruby-1.0" build/host/bin/{mruby,mirb}
+@test "mruby strategy" {
+  package="$TMP/mruby-1.0"
+  executable "$package/minirake" <<OUT
+#!$BASH
+set -e
+echo \$0 "\$@" >> '$INSTALL_ROOT'/build.log
+mkdir -p build/host/bin
+touch build/host/bin/{mruby,mirb}
+chmod +x build/host/bin/{mruby,mirb}
+OUT
+  mkdir -p "$package/include"
+  touch "$package/include/mruby.h"
+  mkdir -p "$RUBY_BUILD_CACHE_PATH"
+  tar czf "$RUBY_BUILD_CACHE_PATH/${package##*/}.tar.gz" -C "${package%/*}" "${package##*/}"
+  rm -rf "$package"
+
+  stub gem false
+  stub rake false
 
   mkdir -p "$INSTALL_ROOT/bin"
   touch "$INSTALL_ROOT/bin/mruby"
   chmod -w "$INSTALL_ROOT/bin/mruby"
 
-  stub gem false
-  stub rake '--version : echo 1' true
-
   run_inline_definition <<DEF
 install_package "mruby-1.0" "http://ruby-lang.org/pub/mruby-1.0.tar.gz" mruby
 DEF
   assert_success
-
-  unstub rake
+  assert_build_log <<OUT
+./minirake
+OUT
 
   assert [ -w "$INSTALL_ROOT/bin/mruby" ]
   assert [ -e "$INSTALL_ROOT/bin/ruby" ]
   assert [ -e "$INSTALL_ROOT/bin/irb" ]
-}
-
-@test "mruby strategy fetches rake if missing" {
-  cached_tarball "mruby-1.0" build/host/bin/mruby
-
-  stub rake '--version : false' true
-  stub gem 'install rake -v *10.1.0 : true'
-
-  run_inline_definition <<DEF
-install_package "mruby-1.0" "http://ruby-lang.org/pub/mruby-1.0.tar.gz" mruby
-DEF
-  assert_success
-
-  unstub gem
-  unstub rake
+  assert [ -e "$INSTALL_ROOT/include/mruby.h" ]
 }
 
 @test "rbx uses bundle then rake" {
@@ -445,7 +488,7 @@ DEF
 
   assert_build_log <<OUT
 bundle --path=vendor/bundle
-rubinius-2.0.0: --prefix=$INSTALL_ROOT RUBYOPT=-rubygems
+rubinius-2.0.0: --prefix=$INSTALL_ROOT RUBYOPT=-rrubygems
 bundle exec rake install
 OUT
 }
@@ -533,22 +576,6 @@ nice gem things
 OUT
 }
 
-@test "JRuby+Graal does not install launchers" {
-  executable "${RUBY_BUILD_CACHE_PATH}/jruby-9000.dev/bin/jruby" <<OUT
-#!${BASH}
-# graalvm
-echo jruby "\$@" >> ../build.log
-OUT
-  cached_tarball "jruby-9000.dev"
-
-  run_inline_definition <<DEF
-install_package "jruby-9000.dev" "http://lafo.ssw.uni-linz.ac.at/jruby-9000+graal-macosx-x86_64.tar.gz" jruby
-DEF
-  assert_success
-
-  assert [ ! -e "$INSTALL_ROOT/build.log" ]
-}
-
 @test "JRuby Java 7 missing" {
   cached_tarball "jruby-9000.dev" bin/jruby
 
@@ -559,20 +586,21 @@ require_java7
 install_package "jruby-9000.dev" "http://ci.jruby.org/jruby-dist-9000.dev-bin.tar.gz" jruby
 DEF
   assert_failure
-  assert_output_contains "ERROR: Java 7 required. Please install a 1.7-compatible JRE."
+  assert_output_contains "ERROR: Java 7 required, but your Java version was:"
 }
 
 @test "JRuby Java is outdated" {
   cached_tarball "jruby-9000.dev" bin/jruby
 
-  stub java '-version : echo java version "1.6.0_21" >&2'
+  stub java "-version : echo 'java version \"1.6.0_21\"' >&2"
 
   run_inline_definition <<DEF
 require_java7
 install_package "jruby-9000.dev" "http://ci.jruby.org/jruby-dist-9000.dev-bin.tar.gz" jruby
 DEF
   assert_failure
-  assert_output_contains "ERROR: Java 7 required. Please install a 1.7-compatible JRE."
+  assert_output_contains "ERROR: Java 7 required, but your Java version was:"
+  assert_output_contains 'java version "1.6.0_21"'
 }
 
 @test "JRuby Java 7 up-to-date" {
@@ -611,6 +639,43 @@ DEF
   assert_success
 }
 
+@test "JRuby Java 9 version string" {
+  cached_tarball "jruby-9000.dev" bin/jruby
+
+  stub java "-version : echo 'java version \"9\"' >&2"
+
+  run_inline_definition <<DEF
+require_java7
+install_package "jruby-9000.dev" "http://ci.jruby.org/jruby-dist-9000.dev-bin.tar.gz" jruby
+DEF
+  assert_success
+}
+
+@test "JRuby Java 10 version string" {
+  cached_tarball "jruby-9000.dev" bin/jruby
+
+  stub java "-version : echo 'java version \"10.8\"' >&2"
+
+  run_inline_definition <<DEF
+require_java 9
+install_package "jruby-9000.dev" "http://ci.jruby.org/jruby-dist-9000.dev-bin.tar.gz" jruby
+DEF
+  assert_success
+}
+
+@test "TruffleRuby post-install hook" {
+  executable "${RUBY_BUILD_CACHE_PATH}/truffleruby-test/lib/truffle/post_install_hook.sh" <<OUT
+echo Running post-install hook
+OUT
+  cached_tarball "truffleruby-test" bin/truffleruby
+
+  run_inline_definition <<DEF
+install_package "truffleruby-test" "URL" truffleruby
+DEF
+  assert_success
+  assert_output_contains "Running post-install hook"
+}
+
 @test "non-writable TMPDIR aborts build" {
   export TMPDIR="${TMP}/build"
   mkdir -p "$TMPDIR"
@@ -629,4 +694,17 @@ DEF
   touch "${TMP}/build-definition"
   run ruby-build "${TMP}/build-definition" "$INSTALL_ROOT"
   assert_failure "ruby-build: TMPDIR=$TMPDIR is set to a non-accessible location"
+}
+
+@test "initializes LDFLAGS directories" {
+  cached_tarball "ruby-2.0.0"
+
+  export LDFLAGS="-L ${BATS_TEST_DIRNAME}/what/evs"
+  run_inline_definition <<DEF
+install_package "ruby-2.0.0" "http://ruby-lang.org/ruby/2.0/ruby-2.0.0.tar.gz" ldflags_dirs
+DEF
+  assert_success
+
+  assert [ -d "${INSTALL_ROOT}/lib" ]
+  assert [ -d "${BATS_TEST_DIRNAME}/what/evs" ]
 }

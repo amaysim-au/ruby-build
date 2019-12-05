@@ -8,12 +8,13 @@ NUM_DEFINITIONS="$(ls "$BATS_TEST_DIRNAME"/../share/ruby-build | wc -l)"
   assert_success
   assert_output_contains "1.9.3-p194"
   assert_output_contains "jruby-1.7.9"
+  assert_output_contains "truffleruby-1.0.0-rc2"
   assert [ "${#lines[*]}" -eq "$NUM_DEFINITIONS" ]
 }
 
 @test "custom RUBY_BUILD_ROOT: nonexistent" {
   export RUBY_BUILD_ROOT="$TMP"
-  assert [ ! -e "${RUBY_BUILD_ROOT}/share/ruby-build" ]
+  refute [ -e "${RUBY_BUILD_ROOT}/share/ruby-build" ]
   run ruby-build --definitions
   assert_success ""
 }
@@ -68,7 +69,10 @@ NUM_DEFINITIONS="$(ls "$BATS_TEST_DIRNAME"/../share/ruby-build | wc -l)"
 @test "sorting Ruby versions" {
   export RUBY_BUILD_ROOT="$TMP"
   mkdir -p "${RUBY_BUILD_ROOT}/share/ruby-build"
-  expected="1.9.3-dev
+  expected="1.8.7
+1.8.7-p72
+1.8.7-p375
+1.9.3-dev
 1.9.3-preview1
 1.9.3-rc1
 1.9.3-p0
@@ -87,8 +91,11 @@ jruby-1.7.1
 jruby-1.7.9
 jruby-1.7.10
 jruby-9000-dev
-jruby-9000"
-  for ver in "$expected"; do
+jruby-9000
+truffleruby-1.0.0-rc2
+truffleruby-19.0.0
+truffleruby-19.3.0"
+  for ver in $expected; do
     touch "${RUBY_BUILD_ROOT}/share/ruby-build/$ver"
   done
   run ruby-build --definitions
