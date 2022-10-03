@@ -6,6 +6,9 @@ export RBENV_ROOT="${TMP}/rbenv"
 setup() {
   stub rbenv-hooks 'install : true'
   stub rbenv-rehash 'true'
+  stub rbenv-version-file 'echo $RBENV_ROOT/version'
+  mkdir -p "$RBENV_ROOT"
+  echo "system" > "$RBENV_ROOT/version"
 }
 
 stub_ruby_build() {
@@ -23,6 +26,20 @@ stub_ruby_build() {
   unstub rbenv-rehash
 }
 
+@test "suggest running rbenv global after install" {
+  rm -rf "$RBENV_ROOT/version"
+  stub_ruby_build 'echo ruby-build "$@"'
+
+  run rbenv-install 2.1.2
+  assert_success <<OUT
+ruby-build 2.1.2 ${RBENV_ROOT}/versions/2.1.2
+
+NOTE: to activate this Ruby version as the new default, run: rbenv global 2.1.2
+OUT
+
+  unstub ruby-build
+}
+
 @test "install rbenv local version by default" {
   stub_ruby_build 'echo ruby-build "$1"'
   stub rbenv-local 'echo 2.1.2'
@@ -34,18 +51,26 @@ stub_ruby_build() {
   unstub rbenv-local
 }
 
+@test "list latest versions" {
+  stub_ruby_build "--list : echo 2.1.2"
+
+  run rbenv-install --list
+  assert_success "2.1.2"
+
+  unstub ruby-build
+}
+
 @test "list available versions" {
   stub_ruby_build \
     "--definitions : echo 1.8.7 1.9.3-p0 1.9.3-p194 2.1.2 | tr ' ' $'\\n'"
 
-  run rbenv-install --list
+  run rbenv-install --list-all
   assert_success
   assert_output <<OUT
-Available versions:
-  1.8.7
-  1.9.3-p0
-  1.9.3-p194
-  2.1.2
+1.8.7
+1.9.3-p0
+1.9.3-p194
+2.1.2
 OUT
 
   unstub ruby-build
@@ -69,7 +94,7 @@ See all available versions with \`rbenv install --list'.
 
 If the version you need is missing, try upgrading ruby-build:
 
-  cd ${BATS_TEST_DIRNAME}/.. && git pull && cd -
+  git -C ${BATS_TEST_DIRNAME}/.. pull
 OUT
 
   unstub ruby-build
@@ -97,7 +122,7 @@ OUT
 }
 
 @test "no build definitions from plugins" {
-  assert [ ! -e "${RBENV_ROOT}/plugins" ]
+  refute [ -e "${RBENV_ROOT}/plugins" ]
   stub_ruby_build 'echo $RUBY_BUILD_DEFINITIONS'
 
   run rbenv-install 2.1.2
@@ -123,13 +148,12 @@ OUT
   mkdir -p "${RBENV_ROOT}/plugins/bar/share/ruby-build"
   stub_ruby_build "--definitions : echo \$RUBY_BUILD_DEFINITIONS | tr ':' $'\\n'"
 
-  run rbenv-install --list
+  run rbenv-install --list-all
   assert_success
   assert_output <<OUT
-Available versions:
-  
-  ${RBENV_ROOT}/plugins/bar/share/ruby-build
-  ${RBENV_ROOT}/plugins/foo/share/ruby-build
+
+${RBENV_ROOT}/plugins/bar/share/ruby-build
+${RBENV_ROOT}/plugins/foo/share/ruby-build
 OUT
 }
 
@@ -141,6 +165,14 @@ OUT
   run rbenv-install --complete
   assert_success
   assert_output <<OUT
+--list
+--list-all
+--force
+--skip-existing
+--keep
+--patch
+--verbose
+--version
 
 ${RBENV_ROOT}/plugins/bar/share/ruby-build
 ${RBENV_ROOT}/plugins/foo/share/ruby-build

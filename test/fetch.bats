@@ -18,6 +18,31 @@ setup() {
   assert_output_contains "error: failed to download package-1.0.0.tar.gz"
 }
 
+@test "no download tool" {
+  export -n RUBY_BUILD_HTTP_CLIENT
+  clean_path="$(remove_commands_from_path curl wget aria2c)"
+
+  PATH="$clean_path" install_fixture definitions/without-checksum
+  assert_failure
+  assert_output_contains 'error: install `curl`, `wget`, or `aria2c` to download packages'
+}
+
+@test "using aria2c if available" {
+  export RUBY_BUILD_ARIA2_OPTS=
+  export -n RUBY_BUILD_HTTP_CLIENT
+  stub aria2c "--allow-overwrite=true --no-conf=true -o * http://example.com/* : cp $FIXTURE_ROOT/\${5##*/} \$4"
+
+  install_fixture definitions/without-checksum
+  assert_success
+  assert_output <<OUT
+Downloading package-1.0.0.tar.gz...
+-> http://example.com/packages/package-1.0.0.tar.gz
+Installing package-1.0.0...
+Installed package-1.0.0 to ${TMP}/install
+OUT
+  unstub aria2c
+}
+
 @test "fetching from git repository" {
   stub git "clone --depth 1 --branch master http://example.com/packages/package.git package-dev : mkdir package-dev"
 

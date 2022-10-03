@@ -1,16 +1,37 @@
 export TMP="$BATS_TEST_DIRNAME/tmp"
+export RUBY_BUILD_CURL_OPTS=
+export RUBY_BUILD_HTTP_CLIENT="curl"
+export RUBY_BUILD_TESTING=true
 
 if [ "$FIXTURE_ROOT" != "$BATS_TEST_DIRNAME/fixtures" ]; then
   export FIXTURE_ROOT="$BATS_TEST_DIRNAME/fixtures"
   export INSTALL_ROOT="$TMP/install"
-  PATH=/usr/bin:/usr/sbin:/bin/:/sbin
+  PATH="/usr/bin:/bin:/usr/sbin:/sbin"
+  if [ "FreeBSD" = "$(uname -s)" ]; then
+    PATH="/usr/local/bin:$PATH"
+  fi
   PATH="$BATS_TEST_DIRNAME/../bin:$PATH"
   PATH="$TMP/bin:$PATH"
   export PATH
 fi
 
+remove_commands_from_path() {
+  local path cmd
+  local NEWPATH=":$PATH:"
+  while PATH="${NEWPATH#:}" command -v "$@" >/dev/null; do
+    local paths=( $(PATH="${NEWPATH#:}" command -v "$@" | sed 's!/[^/]*$!!' | sort -u) )
+    for path in "${paths[@]}"; do
+      local tmp_path="$(mktemp -d "$TMP/path.XXXXX")"
+      ln -fs "$path"/* "$tmp_path/"
+      for cmd; do rm -f "$tmp_path/$cmd"; done
+      NEWPATH="${NEWPATH/:$path:/:$tmp_path:}"
+    done
+  done
+  echo "${NEWPATH#:}"
+}
+
 teardown() {
-  rm -fr "$TMP"/*
+  rm -fr "${TMP:?}"/*
 }
 
 stub() {
@@ -68,6 +89,12 @@ install_fixture() {
 assert() {
   if ! "$@"; then
     flunk "failed: $@"
+  fi
+}
+
+refute() {
+  if "$@"; then
+    flunk "expected to fail: $@"
   fi
 }
 
